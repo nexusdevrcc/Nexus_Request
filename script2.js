@@ -378,7 +378,7 @@ Leia as documentações que regem a companhia [url=https://sites.google.com/view
 [img]https://i.imgur.com/1kZvQHs.png[/img][/center][/font]`
         };
         const CONFIG = {
-            forumBaseUrl: 'https://www.brendonrcc.forumeiros.com',
+            forumBaseUrl: 'https://brendonrcc.forumeiros.com',
             mainTopicId: 1,
             subgroups: { spp: { topicId: 37743, color: '#351241' }, cdc: { topicId: 36345, color: '#560c7e' }, da: { topicId: 32450, color: '#8c54cc' } },
             antifloodDelay: 5000,
@@ -427,7 +427,7 @@ Leia as documentações que regem a companhia [url=https://sites.google.com/view
 
         function showSubmissionDestinationModal(hasPrivateMessage, title = 'Requerimento enviado!', forumPosts = []) {
             markActiveSubmitButtonSent();
-            const requirementsPath = '/t1-prof-requerimentos-da-companhia';
+            const requirementsPath = '/t1-meu-primeiro-topico';
             const sentboxPath = '/privmsg?folder=outbox';
             const seenTopics = new Set();
             const subgroupPosts = forumPosts.filter(post => {
@@ -1170,7 +1170,8 @@ Leia as documentações que regem a companhia [url=https://sites.google.com/view
         function submitForm6() { if (submitToAPI("form6", "https://api.apispreadsheets.com/data/S8pqWcmccOyEJRDO/")) processarFirebaseForm6(); }
 
         function postToForum(payload) {
-            return $.post('/post', payload);
+            const forumPostUrl = getForumDestinationUrl('/post');
+            return $.post(forumPostUrl, payload);
         }
 
         function getForumDestination(post) {
