@@ -437,38 +437,36 @@ Leia as documentações que regem a companhia [url=https://sites.google.com/view
                 return true;
             });
 
-            const mainActions = `<div class="completion-actions ${hasPrivateMessage ? '' : 'single'}">
-                    <a class="completion-button primary" href="${getForumDestinationUrl(requirementsPath)}" target="_blank" rel="noopener"><i class="fas fa-clipboard-list"></i> Ver requerimentos</a>
-                    ${hasPrivateMessage ? `<a class="completion-button secondary" href="${getForumDestinationUrl(sentboxPath)}" target="_blank" rel="noopener"><i class="fas fa-paper-plane"></i> Ver MPs enviadas</a>` : ''}
-                </div>`;
+            const actions = [
+                `<a class="toast-text-link" href="${getForumDestinationUrl(requirementsPath)}" target="_blank" rel="noopener">ver os requerimentos</a>`
+            ];
+            if (hasPrivateMessage) {
+                actions.push(`<a class="toast-text-link" href="${getForumDestinationUrl(sentboxPath)}" target="_blank" rel="noopener">ver as MPs enviadas</a>`);
+            }
+            actions.push('<a class="toast-text-link" href="#" id="resetAfterSubmission">postar novamente</a>');
 
-            const subgroupActions = subgroupPosts.length
-                ? `<div class="completion-subgroups-section">
-                       <div class="completion-section-title"><span></span>Conferir grupos internos<span></span></div>
-                       <div class="completion-subgroups">
-                           ${subgroupPosts.map(post => {
-                               const destination = getForumDestination(post);
-                               return `<a class="completion-subgroup" href="${getForumDestinationUrl(`/t${post.topic}-`)}" target="_blank" rel="noopener">
-                                   <img src="${destination.logo}" alt="Logo ${escapeHtml(destination.shortName)}">
-                                   <span><strong>${escapeHtml(destination.shortName)}</strong><small>Abrir fórum</small></span>
-                                   <i class="fas fa-external-link-alt"></i>
-                               </a>`;
-                           }).join('')}
-                       </div>
-                   </div>`
+            const inlineActions = actions.length === 2
+                ? actions.join(' ou ')
+                : `${actions.slice(0, -1).join(', ')} ou ${actions.at(-1)}`;
+
+            const subgroupLinks = subgroupPosts.map(post => {
+                const destination = getForumDestination(post);
+                return `<a class="toast-text-link" href="${getForumDestinationUrl(`/t${post.topic}-`)}" target="_blank" rel="noopener">${escapeHtml(destination.shortName)}</a>`;
+            });
+            const subgroupText = subgroupLinks.length
+                ? ` Também foi enviado para ${subgroupLinks.join(subgroupLinks.length === 2 ? ' e ' : ', ')}.`
                 : '';
 
             showCustomModal(
-                title,
-                `<div class="send-kicker"><i class="fas fa-check"></i>&nbsp; Envio concluído</div>
-                 <p>${hasPrivateMessage ? 'O requerimento e as mensagens privadas foram enviados. Confira cada destino antes de voltar a postar.' : 'O requerimento foi publicado. Confira os destinos antes de voltar a postar.'}</p>
-                 ${mainActions}
-                 ${subgroupActions}
-                 <button type="button" class="completion-reset" id="resetAfterSubmission"><i class="fas fa-redo-alt"></i> Voltar a postar</button>`,
+                '',
+                `${hasPrivateMessage ? 'O requerimento e as mensagens privadas foram enviados com sucesso.' : 'O requerimento foi postado com sucesso.'}${subgroupText} Deseja ${inlineActions}?`,
                 { icon: 'success', buttons: false }
             );
 
-            document.getElementById('resetAfterSubmission')?.addEventListener('click', () => window.location.reload());
+            document.getElementById('resetAfterSubmission')?.addEventListener('click', event => {
+                event.preventDefault();
+                window.location.reload();
+            });
         }
 
         const formTitles = {
@@ -1222,11 +1220,9 @@ Leia as documentações que regem a companhia [url=https://sites.google.com/view
             body.delete('preview');
             body.set('post', 'Enviar');
 
-            const disableHtmlControl = form.querySelector('input[name="disable_html"]');
-            body.set(
-                disableHtmlControl?.name || 'disable_html',
-                disableHtmlControl?.value || '1'
-            );
+            // O requerimento usa HTML dentro do BBCode para renderizar os ícones.
+            // A ausência deste campo equivale a deixar "Desativar HTML" desmarcado.
+            body.delete('disable_html');
 
             const actionUrl = new URL(form.getAttribute('action') || '/post', forumOrigin);
             if (actionUrl.origin !== forumOrigin) {
@@ -1277,35 +1273,17 @@ Leia as documentações que regem a companhia [url=https://sites.google.com/view
             const post = posts[index];
             const destination = getForumDestination(post);
             const isSent = status === 'sent';
-            const completed = index + (isSent ? 1 : 0);
-            const progress = Math.max(7, Math.round((completed / posts.length) * 100));
-            const statusHtml = isSent
-                ? '<span class="delivery-status sent"><i class="fas fa-check"></i> Enviado</span>'
-                : '<span class="delivery-status"><i class="fas fa-circle-notch delivery-spinner"></i> Enviando</span>';
-            let helper = isSent ? 'Publicação concluída neste destino.' : 'Gerando e enviando o BBCode para o tópico correto.';
-
+            const destinationName = `<strong class="toast-text-emphasis">${escapeHtml(destination.name)}</strong>`;
+            let message = `Publicando o requerimento em ${destinationName}. Aguarde um instante.`;
             if (isSent && index < posts.length - 1) {
-                helper = `Próximo subgrupo em ${Math.round(delayMs / 1000)} segundos para evitar flood.`;
+                message = `Publicado em ${destinationName}. O próximo destino será enviado em <strong class="toast-text-emphasis" id="forumCountdown">${Math.ceil(delayMs / 1000)}</strong>s.`;
+            } else if (isSent) {
+                message = `Publicação confirmada em ${destinationName}.`;
             }
 
-            const countdownHtml = isSent && index < posts.length - 1
-                ? `<div class="delivery-countdown"><i class="far fa-clock"></i><span>Próximo envio em <strong id="forumCountdown">${Math.ceil(delayMs / 1000)}</strong> segundos</span></div>`
-                : '';
-
             showCustomModal(
-                isSent ? 'Destino concluído' : 'Publicando requerimento...',
-                `<div class="send-kicker">Destino ${index + 1} de ${posts.length}</div>
-                 <div class="forum-delivery-card">
-                    <img class="forum-delivery-logo" src="${destination.logo}" alt="Logo ${escapeHtml(destination.shortName)}">
-                    <div class="delivery-copy">
-                        <strong>${escapeHtml(destination.name)}</strong>
-                        <span>Tópico #${escapeHtml(post.topic)}</span>
-                    </div>
-                    ${statusHtml}
-                 </div>
-                 <div class="delivery-progress-track"><span style="width:${progress}%"></span></div>
-                 <p class="delivery-helper">${helper}</p>
-                 ${countdownHtml}`,
+                '',
+                message,
                 { icon: isSent ? 'success' : 'info', buttons: false }
             );
         }
@@ -1526,43 +1504,38 @@ Leia as documentações que regem a companhia [url=https://sites.google.com/view
             return `https://www.habbo.com.br/habbo-imaging/avatarimage?user=${encodeURIComponent(username)}&direction=2&head_direction=3&gesture=sml&size=m`;
         }
 
-        function showPrivateMessageProgress(recipients, letterLabel) {
-            const recipientCards = recipients.map((recipient, index) => `
-                <div class="pm-delivery-item" data-delivery-index="${index}">
-                    <div class="pm-delivery-avatar">
-                        <span>${escapeHtml(recipient.charAt(0).toUpperCase() || '?')}</span>
-                        <img src="${getHabboAvatarUrl(recipient)}" alt="Avatar Habbo de ${escapeHtml(recipient)}" onerror="this.style.display='none'">
-                    </div>
-                    <div class="delivery-copy">
-                        <strong>${escapeHtml(recipient)}</strong>
-                        <span>${escapeHtml(letterLabel)}</span>
-                    </div>
-                    <span class="delivery-status"><i class="fas fa-circle-notch delivery-spinner"></i> Enviando</span>
-                </div>`).join('');
+        let privateMessageProgress = null;
+        function renderPrivateMessageProgress() {
+            if (!privateMessageProgress) return;
+            const { recipients, letterLabel, statuses } = privateMessageProgress;
+            const sent = statuses.filter(status => status === 'sent').length;
+            const failed = statuses.filter(status => status === 'error').length;
+            const finished = sent + failed;
+            const totalLabel = `${recipients.length} ${recipients.length === 1 ? 'destinatário' : 'destinatários'}`;
+            const message = finished < recipients.length
+                ? `Enviando <strong class="toast-text-emphasis">${escapeHtml(letterLabel)}</strong> para ${totalLabel}. <strong class="toast-text-emphasis">${finished}/${recipients.length}</strong> concluídas.`
+                : failed
+                    ? `O envio terminou com <strong class="toast-text-emphasis">${failed}</strong> ${failed === 1 ? 'falha' : 'falhas'}.`
+                    : `<strong class="toast-text-emphasis">${escapeHtml(letterLabel)}</strong> enviada para ${totalLabel}.`;
+            showCustomModal('', message, {
+                icon: failed ? 'error' : finished === recipients.length ? 'success' : 'info',
+                buttons: false
+            });
+        }
 
-            showCustomModal(
-                'Enviando mensagens privadas...',
-                `<div class="send-kicker">Forumeiros • ${recipients.length} ${recipients.length === 1 ? 'destinatário' : 'destinatários'}</div>
-                 <div class="pm-delivery-list">${recipientCards}</div>
-                 <p class="delivery-helper">As mensagens são processadas individualmente e ao mesmo tempo.</p>`,
-                { icon: 'info', buttons: false }
-            );
+        function showPrivateMessageProgress(recipients, letterLabel) {
+            privateMessageProgress = {
+                recipients,
+                letterLabel,
+                statuses: recipients.map(() => 'sending')
+            };
+            renderPrivateMessageProgress();
         }
 
         function updatePrivateMessageProgress(index, status) {
-            const item = modalText.querySelector(`.pm-delivery-item[data-delivery-index="${index}"]`);
-            if (!item) return;
-            const badge = item.querySelector('.delivery-status');
-            item.classList.remove('sent', 'error');
-            item.classList.add(status);
-
-            if (status === 'sent') {
-                badge.className = 'delivery-status sent';
-                badge.innerHTML = '<i class="fas fa-check"></i> Enviada';
-            } else {
-                badge.className = 'delivery-status error';
-                badge.innerHTML = '<i class="fas fa-times"></i> Falhou';
-            }
+            if (!privateMessageProgress?.statuses[index]) return;
+            privateMessageProgress.statuses[index] = status;
+            renderPrivateMessageProgress();
         }
 
         async function sendPrivateMessagesWithProgress(recipients, subject, message, letterLabel) {
@@ -1651,11 +1624,8 @@ Leia as documentações que regem a companhia [url=https://sites.google.com/view
                 const delayMs = CONFIG.antifloodDelay;
                 const endsAt = Date.now() + delayMs;
                 showCustomModal(
-                    'Intervalo entre cargos',
-                    `<div class="send-kicker"><i class="fas fa-hourglass-half"></i>&nbsp; Proteção contra flood</div>
-                     <p>As MPs do cargo anterior foram enviadas.</p>
-                     <div class="draft-cooldown-role">Próximo cargo: ${escapeHtml(nextTask.role)}</div>
-                     <div class="delivery-countdown"><i class="far fa-clock"></i><span>Próximo envio em <strong id="draftPmCountdown">${Math.ceil(delayMs / 1000)}</strong> segundos</span></div>`,
+                    '',
+                    `As MPs anteriores foram enviadas. O próximo cargo, <strong class="toast-text-emphasis">${escapeHtml(nextTask.role)}</strong>, será processado em <strong class="toast-text-emphasis" id="draftPmCountdown">${Math.ceil(delayMs / 1000)}</strong>s.`,
                     { icon: 'info', buttons: false }
                 );
 
