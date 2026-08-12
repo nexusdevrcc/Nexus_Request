@@ -378,8 +378,8 @@ Leia as documentações que regem a companhia [url=https://sites.google.com/view
 [img]https://i.imgur.com/1kZvQHs.png[/img][/center][/font]`
         };
         const CONFIG = {
-            forumBaseUrl: 'https://www.policiarcc.com',
-            mainTopicId: 32243,
+            forumBaseUrl: 'https://www.brendonrcc.forumeiros.com',
+            mainTopicId: 1,
             subgroups: { spp: { topicId: 37743, color: '#351241' }, cdc: { topicId: 36345, color: '#560c7e' }, da: { topicId: 32450, color: '#8c54cc' } },
             antifloodDelay: 5000,
             redirectDelay: 2000,
