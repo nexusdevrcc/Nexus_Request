@@ -1169,9 +1169,101 @@ Leia as documentações que regem a companhia [url=https://sites.google.com/view
         function submitForm5() { if (submitToAPI("form5", "https://api.apispreadsheets.com/data/8LnLGL6kMgWWfopK/")) processarFirebaseForm5(); }
         function submitForm6() { if (submitToAPI("form6", "https://api.apispreadsheets.com/data/S8pqWcmccOyEJRDO/")) processarFirebaseForm6(); }
 
+        function parseForumDocument(html) {
+            return new DOMParser().parseFromString(html, 'text/html');
+        }
+
+        function forumLoginRequired(documentNode, responseUrl) {
+            return /\/login(?:\?|$)/i.test(responseUrl || '')
+                || Boolean(documentNode.querySelector('form[action*="/login"] input[name="username"]'));
+        }
+
+        function findForumPostingForm(documentNode) {
+            return Array.from(documentNode.forms).find(form =>
+                form.querySelector('textarea[name="message"], textarea#text_editor_textarea, textarea')
+            );
+        }
+
+        async function submitForumReply(payload) {
+            const forumOrigin = new URL(CONFIG.forumBaseUrl).origin;
+            if (window.location.origin !== forumOrigin) {
+                throw new Error(`Abra esta página em ${forumOrigin} e entre na sua conta antes de postar.`);
+            }
+
+            const replyUrl = new URL('/post', forumOrigin);
+            replyUrl.searchParams.set('t', String(payload.t));
+            replyUrl.searchParams.set('mode', payload.mode || 'reply');
+
+            const formResponse = await fetch(replyUrl, {
+                credentials: 'include',
+                redirect: 'follow',
+                cache: 'no-store'
+            });
+            const formHtml = await formResponse.text();
+            const formDocument = parseForumDocument(formHtml);
+
+            if (!formResponse.ok) {
+                throw new Error(`O fórum respondeu com status ${formResponse.status}.`);
+            }
+            if (forumLoginRequired(formDocument, formResponse.url)) {
+                throw new Error('Entre no fórum antes de usar a postagem automática.');
+            }
+
+            const form = findForumPostingForm(formDocument);
+            if (!form) {
+                throw new Error('O formulário de resposta não foi encontrado. Confirme se o tópico existe, está aberto e você possui permissão para responder.');
+            }
+
+            const textarea = form.querySelector('textarea[name="message"], textarea#text_editor_textarea, textarea');
+            const body = new FormData(form);
+            body.set(textarea.name || 'message', payload.message || '');
+            body.set('t', String(payload.t));
+            body.set('mode', payload.mode || 'reply');
+            body.delete('preview');
+            body.set('post', 'Enviar');
+
+            const disableHtmlControl = form.querySelector('input[name="disable_html"]');
+            body.set(
+                disableHtmlControl?.name || 'disable_html',
+                disableHtmlControl?.value || '1'
+            );
+
+            const actionUrl = new URL(form.getAttribute('action') || '/post', forumOrigin);
+            if (actionUrl.origin !== forumOrigin) {
+                throw new Error('O formulário do fórum apontou para uma origem inesperada.');
+            }
+
+            const postResponse = await fetch(actionUrl, {
+                method: 'POST',
+                credentials: 'include',
+                redirect: 'follow',
+                body
+            });
+            const resultHtml = await postResponse.text();
+            const resultDocument = parseForumDocument(resultHtml);
+
+            if (!postResponse.ok) {
+                throw new Error(`O fórum recusou o envio com status ${postResponse.status}.`);
+            }
+            if (forumLoginRequired(resultDocument, postResponse.url)) {
+                throw new Error('Sua sessão do fórum expirou. Entre novamente.');
+            }
+            if (/\/post(?:\?|$)/i.test(postResponse.url || '') && findForumPostingForm(resultDocument)) {
+                const forumError = resultDocument.querySelector(
+                    '.message-die, .error, .panel .error, .block-error'
+                )?.textContent?.trim();
+                throw new Error(forumError || 'O fórum não confirmou a publicação.');
+            }
+
+            return postResponse.url;
+        }
+
         function postToForum(payload) {
-            const forumPostUrl = getForumDestinationUrl('/post');
-            return $.post(forumPostUrl, payload);
+            const deferred = $.Deferred();
+            submitForumReply(payload)
+                .then(result => deferred.resolve(result))
+                .catch(error => deferred.reject(null, 'error', error?.message || String(error)));
+            return deferred.promise();
         }
 
         function getForumDestination(post) {
